@@ -62,27 +62,34 @@ def validate(hash_str, init_data, token, c_str="WebAppData"):
     method documented here:
     https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
 
-    hash_str - the has string passed by the webapp
+    hash_str - the hash string passed by the webapp
     init_data - the query string passed by the webapp
     token - Telegram bot's token
     c_str - constant string (default = "WebAppData")
     """
     print("Validation 1", init_data)
+    
+    # Корректное исключение параметра 'hash'
     init_data = sorted(
         [
             chunk.split("=")
             for chunk in unquote(init_data).split("&")
-            if chunk[: len("hash=")] != "hash="
+            if not chunk.startswith("hash=")  # Исключаем параметр 'hash'
         ],
-        key=lambda x: x[0],
+        key=lambda x: x[0],  # Сортируем параметры
     )
     print("Validation 2", init_data)
+    
+    # Воссоздаем data_check_string
     init_data = "\n".join([f"{rec[0]}={rec[1]}" for rec in init_data])
     print("Validation 3", init_data)
-    secret_key = hmac.new(c_str.encode(), token.encode(), sha256).digest()
-    data_check = hmac.new(secret_key, init_data.encode(), sha256)
+    
+    # Создаем секретный ключ на основе токена и константной строки
+    secret_key = hmac.new(c_str.encode(), token.encode(), hashlib.sha256).digest()
+    data_check = hmac.new(secret_key, init_data.encode(), hashlib.sha256).hexdigest()
 
-    return data_check.hexdigest() == hash_str
+    # Сравниваем вычисленный хэш с предоставленным хэшем
+    return data_check == hash_str
 
 
 def generate_jwt(user_id: str, token_type: str, expiry_minutes: int):

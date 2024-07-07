@@ -27,29 +27,41 @@ async def telegram_authenticate(auth_data: TelegramAuthData, db: AsyncSession = 
     Authenticates a user using the Telegram data sent after user authentication in Telegram.
     Verifies the hash to ensure the data is from Telegram.
     """
-    print("Auth data telegram azazbqsiuxnbuisqiufdnqwuifnduiwqnfuiqwnuifqwnufiqwnui", auth_data.data_check_string)
+    # Отладочное сообщение для данных аутентификации
+    print("Auth data received:", auth_data.data_check_string)
+    
     data_check_string = auth_data.data_check_string
-
-    # Remove start_param if it exists
     parsed_data = parse_qs(data_check_string)
-    print("ABOBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", parsed_data)
-    # Recreate the data_check_string without start_param
-    filtered_data_check_string = "&".join([f"{key}={value[0]}" for key, value in parsed_data.items()])
+    
+    # Отладочное сообщение для парсированных данных
+    print("Parsed data:", parsed_data)
+    
+    # Извлекаем и удаляем 'hash' из данных
+    hash_value = parsed_data.pop('hash', [None])[0]
+
+    # Воссоздаем data_check_string без 'hash'
+    filtered_data_check_string = "&".join([f"{key}={value[0]}" for key, value in sorted(parsed_data.items())])
+
+    if not hash_value:
+        raise HTTPException(status_code=400, detail="Hash value is missing from auth data")
 
     try:
-        hash_value = parsed_data['hash'][0]
+        # Используем обновленную функцию validate
         verified = validate(hash_value, filtered_data_check_string, BOT_TOKEN)
     except Exception as e:
-        raise HTTPException(status_code=400, detail="Wrong auth data")
+        raise HTTPException(status_code=400, detail=f"Validation error: {str(e)}")
     
     if not verified:
         raise HTTPException(status_code=401, detail="Authentication data is tampered or invalid")
 
-    # Assume auth_data already contains all necessary data.
-    user_json = parsed_data["user"][0]
+    # Обработка данных пользователя
+    user_json = parsed_data.get("user", [None])[0]
+    if not user_json:
+        raise HTTPException(status_code=400, detail="User data is missing from auth data")
+
     user_data = json.loads(user_json)
     user_id = user_data["id"]
-    print(user_id)
+
     response, tokens = await authenticate_user(str(user_id), db)
     if response:
         return JSONResponse(content={"status": "success", "access_token": tokens[0], "refresh_token": tokens[1]})
